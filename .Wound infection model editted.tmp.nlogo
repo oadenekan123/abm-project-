@@ -7,6 +7,7 @@ globals
   Macrophage-Strength
   Neutrophil-Homing-Range
   ShowDebris
+;  number-antibiotic-molecules
   ; staph-prolif-rate 0.5 ; num hours for
 ]
 
@@ -42,6 +43,7 @@ to setup
     set Macrophage-Strength 3
     set Neutrophil-Homing-Range 1
     set ShowDebris true
+;    set number-antibiotic-molecules 10
 end
 
 to Run-Simulation
@@ -50,6 +52,7 @@ to Run-Simulation
   proliferate-macrophages
   migrate
   Leukocyte-Actions
+  Antibiotics-Actions
 
   if any? bacteria [
     if Neutrophil_Response = "Low" and ticks mod 3 = 0 [create-neutrophils ceiling (.1 * Immune-Cell-Infiltration) [setxy random-xcor random-ycor setxy pycor pxcor set shape "neutrophil" set age 1]]
@@ -74,6 +77,11 @@ to Run-Simulation
 
   ask neutrophils with [age > 48][if 100 * (age / 96) > random 100 [die ask patch-here [set debris debris + 1]]]
   ask macrophages with [age > 96][if 100 * (age / 192) > random 100 [die]]
+  ask antibiotics [
+    if count macrophages = 0 [
+      die
+    ]
+  ]
   ask patches [if debris < 0 [set debris 0]]
 
   ask turtles [set age age + 1]
@@ -95,18 +103,19 @@ to infect
     ]
   ]
 
-  ; set staph as bacteria type
-    ask patch 0 0 [
-    ask n-of initial-staph patches in-radius 15[
+end
+
+to treat
+  ask patch 0 0 [
+    ask n-of number-antibiotic-molecules patches in-radius 15[
       sprout 1        ; create the number of initial bacteria as designated by the slider on the interface tab
       [
-        set breed bacteria              ; denote the 'breed' of the turtle as an "bacteria" cell
-        set shape "bacteria"            ; denote the shape of the turtle as an bacteria cell shape
-        set age random prolif-rate
+        set breed antibiotics              ; denote the 'breed' of the turtle as an "bacteria" cell
+        set shape "turtle"            ; denote the shape of the turtle as an bacteria cell shape
+;        set age random prolif-rate
       ]
     ]
   ]
-
 end
 
 to proliferate-bacteria         ; this sub-routine simulates cell proliferation without any contact inhibition  [
@@ -160,6 +169,7 @@ to proliferate-macrophages                       ; this procedure simulates cell
 
 end
 
+
 to migrate
   if random 100 <= migration-probability          ; migration is probabalistic based on a slider value
   [
@@ -171,6 +181,23 @@ to migrate
       ]
     ]
   ]
+
+  ask antibiotics
+  [
+    ifelse any? bacteria-on neighbors or any? neighbors with [debris > 0]
+    [move-to one-of neighbors with [any? bacteria-here or debris > 0]]
+    [move-to one-of neighbors]
+  ]
+;  if random 100 <= migration-probability          ; migration is probabalistic based on a slider value
+;  [
+;    ask antibiotics
+;    [
+;      if any? neighbors with [not any? antibiotics-here and wound = 1]            ; migration only occurs if there is at least one empty neighboring patch
+;      [
+;        move-to one-of neighbors with [not any? antibiotics-here] ; migrate to one of the 8 neighboring patches without a cell in it already
+;      ]
+;    ]
+;  ]
 
   ask neutrophils ;neutrophils move towards bacteria in their homine range, or to a random neighboring patch
   [
@@ -194,18 +221,39 @@ to Leukocyte-Actions
     [
       ask patch-here [set debris debris + (count bacteria-here)]
       ask bacteria-on patch-here [die]
+
     ]
 
   ]
 
+  let random-num random-float 1
   ask macrophages [if any? bacteria-on patch-here
-    [ask bacteria-on patch-here [die]]
+    [
+    if random-num <= prob-macrophage-killing
+      [ask bacteria-on patch-here [die]]]
+
     if [debris] of patch-here > 0
     [ask patch-here [set debris debris - Macrophage-Strength]]
+
   ]
+
+;  ask macrophages [if any? bacteria-on patch-here
+;    [ask bacteria-on patch-here [die]]
+;    if [debris] of patch-here > 0
+;    [ask patch-here [set debris debris - Macrophage-Strength]]
+;  ]
 
 end
 
+to Antibiotics-Actions
+  ask antibiotics [if any? bacteria-on patch-here or any? bacteria-on neighbors
+    [
+      ask patch-here [set debris debris + (count bacteria-here)]
+      ask bacteria-on patch-here [die]
+      ask antibiotics-on patch-here [die]
+    ]
+  ]
+end
 @#$#@#$#@
 GRAPHICS-WINDOW
 623
@@ -242,7 +290,7 @@ CHOOSER
 Neutrophil_response
 Neutrophil_response
 "Low" "Normal" "High"
-1
+0
 
 SLIDER
 82
@@ -253,7 +301,7 @@ Immune-cell-infiltration
 Immune-cell-infiltration
 0
 10
-10.0
+5.0
 1
 1
 NIL
@@ -267,7 +315,7 @@ CHOOSER
 Macrophage_response
 Macrophage_response
 "Low" "Normal" "High"
-1
+0
 
 SLIDER
 81
@@ -278,7 +326,7 @@ Initial-bacteria
 Initial-bacteria
 0
 100
-10.0
+25.0
 1
 1
 NIL
@@ -501,30 +549,51 @@ PENS
 "debris" 1.0 0 -8431303 true "" "plot count patches with [pcolor > 29] / 709 * 100 \n"
 
 SLIDER
-427
-115
-599
-148
-initial-staph
-initial-staph
+400
+96
+581
+129
+prob-macrophage-killing
+prob-macrophage-killing
 0
-100
-50.0
 1
+1.0
+0.1
 1
 NIL
 HORIZONTAL
 
-SWITCH
-428
-254
-599
-287
-antibiotics-treatment
-antibiotics-treatment
+BUTTON
+286
+52
+355
+85
+NIL
+TREAT\n
+NIL
 1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
 1
--1000
+
+SLIDER
+399
+51
+602
+84
+number-antibiotic-molecules
+number-antibiotic-molecules
+0
+709
+400.0
+50
+1
+NIL
+HORIZONTAL
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -926,19 +995,51 @@ NetLogo 6.2.0
 @#$#@#$#@
 @#$#@#$#@
 <experiments>
-  <experiment name="example experiment" repetitions="2" runMetricsEveryStep="true">
+  <experiment name="non_chronic_low" repetitions="5" runMetricsEveryStep="true">
     <setup>setup
 infect</setup>
     <go>run-simulation</go>
-    <timeLimit steps="168"/>
+    <timeLimit steps="1200"/>
     <metric>count bacteria</metric>
     <metric>count neutrophils</metric>
     <metric>count macrophages</metric>
+    <metric>count patches with [pcolor &gt; 29] / 709 * 100</metric>
+    <enumeratedValueSet variable="Macrophage_response">
+      <value value="&quot;Low&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Immune-cell-infiltration">
+      <value value="5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Neutrophil_response">
+      <value value="&quot;Low&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Prolif-rate">
+      <value value="2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="number-antibiotic-molecules">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Initial-bacteria">
+      <value value="25"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="prob-macrophage-killing">
+      <value value="1"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="non_chronic_med" repetitions="5" runMetricsEveryStep="true">
+    <setup>setup
+infect</setup>
+    <go>run-simulation</go>
+    <timeLimit steps="1200"/>
+    <metric>count bacteria</metric>
+    <metric>count neurtrophils</metric>
+    <metric>count macrophages</metric>
+    <metric>count patches with [pcolor &gt; 29] / 709 * 100</metric>
     <enumeratedValueSet variable="Macrophage_response">
       <value value="&quot;Normal&quot;"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="Immune-cell-infiltration">
-      <value value="6"/>
+      <value value="5"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="Neutrophil_response">
       <value value="&quot;Normal&quot;"/>
@@ -946,10 +1047,545 @@ infect</setup>
     <enumeratedValueSet variable="Prolif-rate">
       <value value="2"/>
     </enumeratedValueSet>
+    <enumeratedValueSet variable="number-antibiotic-molecules">
+      <value value="0"/>
+    </enumeratedValueSet>
     <enumeratedValueSet variable="Initial-bacteria">
-      <value value="10"/>
+      <value value="25"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="prob-macrophage-killing">
+      <value value="0.9"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="non_chronic_high" repetitions="5" runMetricsEveryStep="true">
+    <setup>setup
+infect</setup>
+    <go>run-simulation</go>
+    <timeLimit steps="1200"/>
+    <metric>count bacteria</metric>
+    <metric>count neurtrophils</metric>
+    <metric>count macrophages</metric>
+    <metric>count patches with [pcolor &gt; 29] / 709 * 100</metric>
+    <enumeratedValueSet variable="Macrophage_response">
+      <value value="&quot;High&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Immune-cell-infiltration">
+      <value value="5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Neutrophil_response">
+      <value value="&quot;High&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Prolif-rate">
+      <value value="2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="number-antibiotic-molecules">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Initial-bacteria">
+      <value value="25"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="prob-macrophage-killing">
+      <value value="0.9"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="chronic_high_prob" repetitions="5" runMetricsEveryStep="true">
+    <setup>setup
+infect</setup>
+    <go>run-simulation</go>
+    <timeLimit steps="1200"/>
+    <metric>count bacteria</metric>
+    <metric>count neutrophils</metric>
+    <metric>count macrophages</metric>
+    <metric>count patches with [pcolor &gt; 29] / 709 * 100</metric>
+    <enumeratedValueSet variable="Macrophage_response">
+      <value value="&quot;Low&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Immune-cell-infiltration">
+      <value value="5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Neutrophil_response">
+      <value value="&quot;Low&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Prolif-rate">
+      <value value="2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="number-antibiotic-molecules">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Initial-bacteria">
+      <value value="25"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="prob-macrophage-killing">
+      <value value="0.9"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="chronic_low_prob" repetitions="5" runMetricsEveryStep="true">
+    <setup>setup
+infect</setup>
+    <go>run-simulation</go>
+    <timeLimit steps="1200"/>
+    <metric>count bacteria</metric>
+    <metric>count neutrophils</metric>
+    <metric>count macrophages</metric>
+    <metric>count patches with [pcolor &gt; 29] / 709 * 100</metric>
+    <enumeratedValueSet variable="Macrophage_response">
+      <value value="&quot;Low&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Immune-cell-infiltration">
+      <value value="5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Neutrophil_response">
+      <value value="&quot;Low&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Prolif-rate">
+      <value value="2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="number-antibiotic-molecules">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Initial-bacteria">
+      <value value="25"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="prob-macrophage-killing">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="chronic_high_prob_high_bact" repetitions="5" runMetricsEveryStep="true">
+    <setup>setup
+infect</setup>
+    <go>run-simulation</go>
+    <timeLimit steps="1200"/>
+    <metric>count bacteria</metric>
+    <metric>count neutrophils</metric>
+    <metric>count macrophages</metric>
+    <metric>count patches with [pcolor &gt; 29] / 709 * 100</metric>
+    <enumeratedValueSet variable="Macrophage_response">
+      <value value="&quot;Low&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Immune-cell-infiltration">
+      <value value="5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Neutrophil_response">
+      <value value="&quot;Low&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Prolif-rate">
+      <value value="2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="number-antibiotic-molecules">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Initial-bacteria">
       <value value="50"/>
-      <value value="100"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="prob-macrophage-killing">
+      <value value="0.9"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="treat_chronic_high_prob" repetitions="5" runMetricsEveryStep="true">
+    <setup>setup
+infect
+treat</setup>
+    <go>run-simulation</go>
+    <timeLimit steps="1200"/>
+    <metric>count bacteria</metric>
+    <metric>count neutrophils</metric>
+    <metric>count macrophages</metric>
+    <metric>count patches with [pcolor &gt; 29] / 709 * 100</metric>
+    <enumeratedValueSet variable="Macrophage_response">
+      <value value="&quot;Low&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Immune-cell-infiltration">
+      <value value="5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Neutrophil_response">
+      <value value="&quot;Low&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Prolif-rate">
+      <value value="2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="number-antibiotic-molecules">
+      <value value="400"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Initial-bacteria">
+      <value value="25"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="prob-macrophage-killing">
+      <value value="0.9"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="treat_chronic_low_prob" repetitions="5" runMetricsEveryStep="true">
+    <setup>setup
+infect
+treat</setup>
+    <go>run-simulation</go>
+    <timeLimit steps="1200"/>
+    <metric>count bacteria</metric>
+    <metric>count neutrophils</metric>
+    <metric>count macrophages</metric>
+    <metric>count patches with [pcolor &gt; 29] / 709 * 100</metric>
+    <enumeratedValueSet variable="Macrophage_response">
+      <value value="&quot;Low&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Immune-cell-infiltration">
+      <value value="5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Neutrophil_response">
+      <value value="&quot;Low&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Prolif-rate">
+      <value value="2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="number-antibiotic-molecules">
+      <value value="400"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Initial-bacteria">
+      <value value="25"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="prob-macrophage-killing">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="treat_chronic_high_prob_high_bact" repetitions="5" runMetricsEveryStep="true">
+    <setup>setup
+infect
+treat</setup>
+    <go>run-simulation</go>
+    <timeLimit steps="1200"/>
+    <metric>count bacteria</metric>
+    <metric>count neutrophils</metric>
+    <metric>count macrophages</metric>
+    <metric>count patches with [pcolor &gt; 29] / 709 * 100</metric>
+    <enumeratedValueSet variable="Macrophage_response">
+      <value value="&quot;Low&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Immune-cell-infiltration">
+      <value value="5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Neutrophil_response">
+      <value value="&quot;Low&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Prolif-rate">
+      <value value="2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="number-antibiotic-molecules">
+      <value value="400"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Initial-bacteria">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="prob-macrophage-killing">
+      <value value="0.9"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="prob_1" repetitions="10" runMetricsEveryStep="true">
+    <setup>setup
+infect</setup>
+    <go>run-simulation</go>
+    <timeLimit steps="2400"/>
+    <metric>count bacteria</metric>
+    <metric>count neutrophils</metric>
+    <metric>count macrophages</metric>
+    <metric>count patches with [pcolor &gt; 29] / 709 * 100</metric>
+    <enumeratedValueSet variable="Macrophage_response">
+      <value value="&quot;Low&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Immune-cell-infiltration">
+      <value value="5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Neutrophil_response">
+      <value value="&quot;Low&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Prolif-rate">
+      <value value="2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="number-antibiotic-molecules">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Initial-bacteria">
+      <value value="25"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="prob-macrophage-killing">
+      <value value="1"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="treat_prob_1" repetitions="10" runMetricsEveryStep="true">
+    <setup>setup
+infect
+treat</setup>
+    <go>run-simulation</go>
+    <timeLimit steps="2400"/>
+    <metric>count bacteria</metric>
+    <metric>count neutrophils</metric>
+    <metric>count macrophages</metric>
+    <metric>count patches with [pcolor &gt; 29] / 709 * 100</metric>
+    <enumeratedValueSet variable="Macrophage_response">
+      <value value="&quot;Low&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Immune-cell-infiltration">
+      <value value="5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Neutrophil_response">
+      <value value="&quot;Low&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Prolif-rate">
+      <value value="2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="number-antibiotic-molecules">
+      <value value="400"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Initial-bacteria">
+      <value value="25"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="prob-macrophage-killing">
+      <value value="1"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="treat_prob_0.8" repetitions="10" runMetricsEveryStep="true">
+    <setup>setup
+infect</setup>
+    <go>run-simulation</go>
+    <timeLimit steps="2400"/>
+    <metric>count bacteria</metric>
+    <metric>count neutrophils</metric>
+    <metric>count macrophages</metric>
+    <metric>count patches with [pcolor &gt; 29] / 709 * 100</metric>
+    <enumeratedValueSet variable="Macrophage_response">
+      <value value="&quot;Low&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Immune-cell-infiltration">
+      <value value="5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Neutrophil_response">
+      <value value="&quot;Low&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Prolif-rate">
+      <value value="2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="number-antibiotic-molecules">
+      <value value="400"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Initial-bacteria">
+      <value value="25"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="prob-macrophage-killing">
+      <value value="0.8"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="treat_prob_0.6" repetitions="10" runMetricsEveryStep="true">
+    <setup>setup
+infect</setup>
+    <go>run-simulation</go>
+    <timeLimit steps="2400"/>
+    <metric>count bacteria</metric>
+    <metric>count neutrophils</metric>
+    <metric>count macrophages</metric>
+    <metric>count patches with [pcolor &gt; 29] / 709 * 100</metric>
+    <enumeratedValueSet variable="Macrophage_response">
+      <value value="&quot;Low&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Immune-cell-infiltration">
+      <value value="5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Neutrophil_response">
+      <value value="&quot;Low&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Prolif-rate">
+      <value value="2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="number-antibiotic-molecules">
+      <value value="400"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Initial-bacteria">
+      <value value="25"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="prob-macrophage-killing">
+      <value value="0.6"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="treat_prob_0.4" repetitions="10" runMetricsEveryStep="true">
+    <setup>setup
+infect</setup>
+    <go>run-simulation</go>
+    <timeLimit steps="2400"/>
+    <metric>count bacteria</metric>
+    <metric>count neutrophils</metric>
+    <metric>count macrophages</metric>
+    <metric>count patches with [pcolor &gt; 29] / 709 * 100</metric>
+    <enumeratedValueSet variable="Macrophage_response">
+      <value value="&quot;Low&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Immune-cell-infiltration">
+      <value value="5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Neutrophil_response">
+      <value value="&quot;Low&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Prolif-rate">
+      <value value="2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="number-antibiotic-molecules">
+      <value value="400"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Initial-bacteria">
+      <value value="25"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="prob-macrophage-killing">
+      <value value="0.4"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="treat_prob_0.2" repetitions="10" runMetricsEveryStep="true">
+    <setup>setup
+infect</setup>
+    <go>run-simulation</go>
+    <timeLimit steps="2400"/>
+    <metric>count bacteria</metric>
+    <metric>count neutrophils</metric>
+    <metric>count macrophages</metric>
+    <metric>count patches with [pcolor &gt; 29] / 709 * 100</metric>
+    <enumeratedValueSet variable="Macrophage_response">
+      <value value="&quot;Low&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Immune-cell-infiltration">
+      <value value="5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Neutrophil_response">
+      <value value="&quot;Low&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Prolif-rate">
+      <value value="2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="number-antibiotic-molecules">
+      <value value="400"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Initial-bacteria">
+      <value value="25"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="prob-macrophage-killing">
+      <value value="0.2"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="prob_0.8" repetitions="10" runMetricsEveryStep="true">
+    <setup>setup
+infect</setup>
+    <go>run-simulation</go>
+    <timeLimit steps="2400"/>
+    <metric>count bacteria</metric>
+    <metric>count neutrophils</metric>
+    <metric>count macrophages</metric>
+    <metric>count patches with [pcolor &gt; 29] / 709 * 100</metric>
+    <enumeratedValueSet variable="Macrophage_response">
+      <value value="&quot;Low&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Immune-cell-infiltration">
+      <value value="5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Neutrophil_response">
+      <value value="&quot;Low&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Prolif-rate">
+      <value value="2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="number-antibiotic-molecules">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Initial-bacteria">
+      <value value="25"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="prob-macrophage-killing">
+      <value value="0.8"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="prob_0.6" repetitions="10" runMetricsEveryStep="true">
+    <setup>setup
+infect</setup>
+    <go>run-simulation</go>
+    <timeLimit steps="2400"/>
+    <metric>count bacteria</metric>
+    <metric>count neutrophils</metric>
+    <metric>count macrophages</metric>
+    <metric>count patches with [pcolor &gt; 29] / 709 * 100</metric>
+    <enumeratedValueSet variable="Macrophage_response">
+      <value value="&quot;Low&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Immune-cell-infiltration">
+      <value value="5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Neutrophil_response">
+      <value value="&quot;Low&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Prolif-rate">
+      <value value="2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="number-antibiotic-molecules">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Initial-bacteria">
+      <value value="25"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="prob-macrophage-killing">
+      <value value="0.6"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="prob_0.4" repetitions="10" runMetricsEveryStep="true">
+    <setup>setup
+infect</setup>
+    <go>run-simulation</go>
+    <timeLimit steps="2400"/>
+    <metric>count bacteria</metric>
+    <metric>count neutrophils</metric>
+    <metric>count macrophages</metric>
+    <metric>count patches with [pcolor &gt; 29] / 709 * 100</metric>
+    <enumeratedValueSet variable="Macrophage_response">
+      <value value="&quot;Low&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Immune-cell-infiltration">
+      <value value="5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Neutrophil_response">
+      <value value="&quot;Low&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Prolif-rate">
+      <value value="2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="number-antibiotic-molecules">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Initial-bacteria">
+      <value value="25"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="prob-macrophage-killing">
+      <value value="0.4"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="prob_0.2" repetitions="10" runMetricsEveryStep="true">
+    <setup>setup
+infect</setup>
+    <go>run-simulation</go>
+    <timeLimit steps="2400"/>
+    <metric>count bacteria</metric>
+    <metric>count neutrophils</metric>
+    <metric>count macrophages</metric>
+    <metric>count patches with [pcolor &gt; 29] / 709 * 100</metric>
+    <enumeratedValueSet variable="Macrophage_response">
+      <value value="&quot;Low&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Immune-cell-infiltration">
+      <value value="5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Neutrophil_response">
+      <value value="&quot;Low&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Prolif-rate">
+      <value value="2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="number-antibiotic-molecules">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Initial-bacteria">
+      <value value="25"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="prob-macrophage-killing">
+      <value value="0.2"/>
     </enumeratedValueSet>
   </experiment>
 </experiments>

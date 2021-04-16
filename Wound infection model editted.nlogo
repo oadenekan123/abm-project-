@@ -7,6 +7,7 @@ globals
   Macrophage-Strength
   Neutrophil-Homing-Range
   ShowDebris
+;  number-antibiotic-molecules
   ; staph-prolif-rate 0.5 ; num hours for
 ]
 
@@ -42,15 +43,16 @@ to setup
     set Macrophage-Strength 3
     set Neutrophil-Homing-Range 1
     set ShowDebris true
+;    set number-antibiotic-molecules 10
 end
 
 to Run-Simulation
   proliferate-bacteria
   proliferate-neutrophils
   proliferate-macrophages
-  antibiotics-action
   migrate
   Leukocyte-Actions
+  Antibiotics-Actions
 
   if any? bacteria [
     if Neutrophil_Response = "Low" and ticks mod 3 = 0 [create-neutrophils ceiling (.1 * Immune-Cell-Infiltration) [setxy random-xcor random-ycor setxy pycor pxcor set shape "neutrophil" set age 1]]
@@ -75,6 +77,11 @@ to Run-Simulation
 
   ask neutrophils with [age > 48][if 100 * (age / 96) > random 100 [die ask patch-here [set debris debris + 1]]]
   ask macrophages with [age > 96][if 100 * (age / 192) > random 100 [die]]
+  ask antibiotics [
+    if count macrophages = 0 [
+      die
+    ]
+  ]
   ask patches [if debris < 0 [set debris 0]]
 
   ask turtles [set age age + 1]
@@ -96,18 +103,19 @@ to infect
     ]
   ]
 
-  ; set staph as bacteria type
-    ask patch 0 0 [
-    ask n-of initial-staph patches in-radius 15[
+end
+
+to treat
+  ask patch 0 0 [
+    ask n-of number-antibiotic-molecules patches in-radius 15[
       sprout 1        ; create the number of initial bacteria as designated by the slider on the interface tab
       [
-        set breed bacteria              ; denote the 'breed' of the turtle as an "bacteria" cell
-        set shape "bacteria"            ; denote the shape of the turtle as an bacteria cell shape
-        set age random prolif-rate
+        set breed antibiotics              ; denote the 'breed' of the turtle as an "bacteria" cell
+        set shape "turtle"            ; denote the shape of the turtle as an bacteria cell shape
+;        set age random prolif-rate
       ]
     ]
   ]
-
 end
 
 to proliferate-bacteria         ; this sub-routine simulates cell proliferation without any contact inhibition  [
@@ -161,11 +169,6 @@ to proliferate-macrophages                       ; this procedure simulates cell
 
 end
 
-to antibiotics-action
-  [
-
-  ]
-end
 
 to migrate
   if random 100 <= migration-probability          ; migration is probabalistic based on a slider value
@@ -178,6 +181,23 @@ to migrate
       ]
     ]
   ]
+
+  ask antibiotics
+  [
+    ifelse any? bacteria-on neighbors or any? neighbors with [debris > 0]
+    [move-to one-of neighbors with [any? bacteria-here or debris > 0]]
+    [move-to one-of neighbors]
+  ]
+;  if random 100 <= migration-probability          ; migration is probabalistic based on a slider value
+;  [
+;    ask antibiotics
+;    [
+;      if any? neighbors with [not any? antibiotics-here and wound = 1]            ; migration only occurs if there is at least one empty neighboring patch
+;      [
+;        move-to one-of neighbors with [not any? antibiotics-here] ; migrate to one of the 8 neighboring patches without a cell in it already
+;      ]
+;    ]
+;  ]
 
   ask neutrophils ;neutrophils move towards bacteria in their homine range, or to a random neighboring patch
   [
@@ -201,16 +221,38 @@ to Leukocyte-Actions
     [
       ask patch-here [set debris debris + (count bacteria-here)]
       ask bacteria-on patch-here [die]
+
     ]
 
   ]
 
+  let random-num random-float 1
   ask macrophages [if any? bacteria-on patch-here
-    [ask bacteria-on patch-here [die]]
+    [
+    if random-num <= prob-macrophage-killing
+      [ask bacteria-on patch-here [die]]]
+
     if [debris] of patch-here > 0
     [ask patch-here [set debris debris - Macrophage-Strength]]
+
   ]
 
+;  ask macrophages [if any? bacteria-on patch-here
+;    [ask bacteria-on patch-here [die]]
+;    if [debris] of patch-here > 0
+;    [ask patch-here [set debris debris - Macrophage-Strength]]
+;  ]
+
+end
+
+to Antibiotics-Actions
+  ask antibiotics [if any? bacteria-on patch-here or any? bacteria-on neighbors
+    [
+      ask patch-here [set debris debris + (count bacteria-here)]
+      ask bacteria-on patch-here [die]
+      ask antibiotics-on patch-here [die]
+    ]
+  ]
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
@@ -284,7 +326,7 @@ Initial-bacteria
 Initial-bacteria
 0
 100
-10.0
+76.0
 1
 1
 NIL
@@ -507,30 +549,51 @@ PENS
 "debris" 1.0 0 -8431303 true "" "plot count patches with [pcolor > 29] / 709 * 100 \n"
 
 SLIDER
-427
-115
-599
-148
-initial-staph
-initial-staph
+400
+96
+581
+129
+prob-macrophage-killing
+prob-macrophage-killing
 0
-100
-50.0
 1
+1.0
+0.1
 1
 NIL
 HORIZONTAL
 
-SWITCH
-428
-254
-599
-287
-antibiotics-treatment
-antibiotics-treatment
+BUTTON
+286
+52
+355
+85
+NIL
+TREAT\n
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+SLIDER
+399
+51
+602
+84
+number-antibiotic-molecules
+number-antibiotic-molecules
+0
+100
+100.0
 1
 1
--1000
+NIL
+HORIZONTAL
 
 @#$#@#$#@
 ## WHAT IS IT?
